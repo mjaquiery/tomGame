@@ -2,9 +2,14 @@
     Code: Matt Jaquiery (2017)
 
     Usage:
-    >tom(tomLevel,ROLES.ROLE_HIDER) // set up the TOM as the hider
-    >answers[roundNumber++] = {hider: tom.getNextAnswer(), seeker: Math.round(Math.random())] // Get the players' answers for the round
-    >tom.processFeedback({self: answers[roundNumber-1].hider, opponent: answers[roundNumber-1].seeker}) // get TOM to update its beliefs based on the evidence
+    >// set up the TOM as the hider
+    >tom(tomLevel,ROLES.ROLE_HIDER);
+    >// Get the players' answers for the round
+    >answers[roundNumber++] = {hider: tom.getNextAnswer(), seeker: Math.round(Math.random())];
+    >// Format the answers appropriately for ToM
+    >tomAnswers = {self: answers[roundNumber-1].hider, opponent: answers[roundNumber-1].seeker};
+    >// get TOM to update its beliefs based on the evidence
+    >tom.processFeedback(tomAnswers);
 */
 var ROLE_NAMES = {0: "HIDER", 1: "SEEKER"};
 var ROLES = {HIDER: 0, SEEKER: 1};
@@ -23,7 +28,9 @@ This initiator function performs the logic of prepare_kToM.m
 */
 function tom(level,role,debug) {
     this.type = TOM_TYPES.TOM;
+    this.name = level+"-ToM";
     this.debug = (debug==true);
+    this.d = function (x) {if(this.debug) console.log(x)};
     this.showDebugInfo = showDebugInfo;
 
     this.getNextAnswer = getNextAnswer;
@@ -64,28 +71,38 @@ function tom(level,role,debug) {
 }
 
 function getNextAnswer(processingOther) {
-    return (Math.random()<this.getAnswerProbability(processingOther))? 1 : 0;
+    //return (Math.random()<this.getAnswerProbability(processingOther))? 1 : 0;
+    return (this.getAnswerProbability(processingOther)>0.5)?1:0; // Copy of demo_recur's rule
 }
 
 // MatLab version g_kToM.m and ObsRecGen.m
 function getAnswerProbability(processingOther, overrideVars) {
+    this.d("[ObsRecGen] "+(processingOther==true));
     var level = (processingOther)? this.opponentModel.level : this.level;
     var role = (processingOther)? 1-this.role : this.role;
     var states = (processingOther)? [this.hiddenStates[this.hiddenStates.length-1][this.opponentModel.hiddenStates[0]],this.hiddenStates[this.hiddenStates.length-1][this.opponentModel.hiddenStates[1]]] : this.hiddenStates[this.hiddenStates.length-1]; // hidden states is the last set of hidden states for the agent or its internal simulation (internal is always 0Tom)
     var beta = this.phi[0];
+    var bias = this.phi[1];
     if(typeof overrideVars=="object") {
         if(typeof overrideVars.hiddenStates != "undefined")
             states = overrideVars.hiddenStates;
         if(typeof overrideVars.beta != "undefined")
             beta = overrideVars.beta;
+        if(typeof overrideVars.bias != "undefined")
+            bias = overrideVars.bias;
     }
+    //this.d("beta [log-theta] = "+beta);
+    //this.d("bias = "+bias);
     var pOP; // Opponent's probability of picking 1
     var Vx;
     var a = 0.36; // ObsRecGen.m line 28
     if(level==0) {
         var Ex = states[0]; // E[log-odds of P(opponentChoice=1)]
+        //this.d("Ex [mx] = "+Ex);
         Vx = Math.exp(states[1]); // V[log-odds of P(opponentChoice=1)]
+        //this.d("Vx = "+Vx);
         pOP = sigmoid(Ex / Math.sqrt(1+a*Vx)); // P(opponentChoice=1)
+        //this.d("pOP [Po] = "+pOP);
     } else {
         var pK = 1; // assume opponent is 0ToM
         var f = states[this.opponentModel.f];
@@ -97,9 +114,11 @@ function getAnswerProbability(processingOther, overrideVars) {
         }
         pOP = sigmoid(f/Math.sqrt(1+a*Vx)); // P(opponentChoice=1)
     }
+    this.d("pOP [Po] = "+pOP);
     // Now we know pOP we can work out our own answer
-    var bias = this.phi[1];
     var incentive = this.getIncentive(pOP,Math.exp(beta),role,this.game);
+    //this.d("incentive = "+incentive);
+    this.d("[ObsRecGen output]: "+sigmoid(incentive+bias));
     return sigmoid(incentive+bias);
 }
 
@@ -123,20 +142,23 @@ function getIncentive(pOP, beta, role, game) {
 
 // Update our hidden states based on answers
 function processFeedback(answers,processingOther) {
+    this.d(this.hiddenStates[this.hiddenStates.length-1]);
     this.hiddenStates[this.hiddenStates.length] = this.evolveHiddenStates(answers,processingOther);
-    if(this.debug)
-        console.log(this.hiddenStates[this.hiddenStates.length-1]);
+    this.d("New hiddenStates:");
+    this.d(this.hiddenStates[this.hiddenStates.length-1]);
 }
     // MatLab version f_kToM.m and RecToMfunction.m
     // answers is either -1|0 (special cases for initialisation) or
     // answers = {opponent: 0|1, choice: 0|1}
     // If we're processingOther answers is automatically reversed.
 function evolveHiddenStates(answers,processingOther,overrideVars) {
+    this.d("[RecToMfunction] "+answers+", "+(processingOther==true));
     var prior;
     var posterior;
     var level = (processingOther)? this.opponentModel.level : this.level;
     answers.opponent = (processingOther)? answers.self : answers.opponent; // Flip answers if necessary (we only need opponent answer for 0ToM, and 1ToM can't be processingOther'd)
     var theta = this.theta;
+    //this.d("theta: "+this.theta);
     var hiddenStates = (processingOther)? [this.hiddenStates[this.hiddenStates.length-1][this.opponentModel.hiddenStates[0]],this.hiddenStates[this.hiddenStates.length-1][this.opponentModel.hiddenStates[1]]] : this.hiddenStates[this.hiddenStates.length-1]; // hidden states is the last set of hidden states for the agent or its internal simulation
     if(typeof overrideVars=="object") {
         if (typeof overrideVars.theta != "undefined")
@@ -144,6 +166,7 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
         if(typeof overrideVars.hiddenStates != "undefined")
             hiddenStates = overrideVars.hiddenStates;
     }
+    //this.d("theta override: "+theta);
     // Special cases
     // [these are only ever invoked by 1ToM]
     if(answers===-1) { // setting initial prior, see prepare_kToM.m [lines 47-63]
@@ -158,6 +181,7 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
         posterior[this.opponentModel.Par[2*this.evolvingParameterIndex+1]] = -1; // E(log(exploration temperature))
         return posterior;
     } else if (answers==0) { // settting first hidden state based on initial prior
+        return [0,0,0,0,0,1,-1,0,-1,0,0,0]; // massive HACK
         return this.initialPrior; // just get the initialPrior value and use that
     }
     prior = hiddenStates; // prior is the last set of hidden states (i.e. the previous round's posterior)
@@ -167,13 +191,19 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
 
     // now into RecToMfunction.m
     if(level == 0) {
+        this.d("[evolution0bisND ("+theta+")] input: "+[prior[0],prior[1]]);
         // 0ToM case, MatLab function evolution0bisND
         var E0 = prior[0]; // current E[log-odds]
+        //this.d("E0 = "+E0);
         var V0 = Math.exp(prior[1]); // current V[log-odds]
+        //this.d("V0 = "+V0);
         var p0 = sigmoid(E0); // current estimate of P(opponentChoice=1)
+        //this.d("p0 = "+p0);
         var volatility = Math.exp(theta);
+        //this.d("volatility = "+volatility);
         var V = 1 / ((1/(volatility+V0)) + p0*(1-p0)); // updated V[log-odds]
         var E = E0 + V*(answers.opponent-p0); // updated E[log-odds] via Laplace-Kalman update rule
+        this.d("[evolution0bisND] fx="+[inverseSigmoid(sigmoid(E)),Math.log(V)]);
         return [inverseSigmoid(sigmoid(E)),Math.log(V)]; // Packaged for numerical reasons
     }
     // 1ToM case, back to RecToMfunction.m
@@ -194,18 +224,28 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     }
     // Technically that's all we need (formally). But to keep par with the MatLab we augment the hidden states with dummy states derived from the sufficient statistics.
     // Simulate opponent's hidden states
-    var opponentHiddenStates = this.evolveHiddenStates(answers,true);
+    this.d("Update opponent's hidden states.");
+    var temp = {};
+    temp.theta = prior[this.opponentModel.Par[0]];
+    var opponentHiddenStates = this.evolveHiddenStates(answers,true,temp);
     posterior[this.opponentModel.hiddenStates[0]] = opponentHiddenStates[0];
     posterior[this.opponentModel.hiddenStates[1]] = opponentHiddenStates[1];
+    this.d("Opponent states updated.");
     // Simulate opponent's f
-    posterior[this.opponentModel.f] = inverseSigmoid(this.getAnswerProbability(true));
+    this.d("Get new f");
+    temp = {};
+    temp.beta = prior[this.opponentModel.Par[2]];
+    temp.bias = prior[this.opponentModel.Par[4]];
+    posterior[this.opponentModel.f] = inverseSigmoid(this.getAnswerProbability(true,temp));
+    this.d("f_new = "+posterior[this.opponentModel.f]);
+    this.d("New f acquired.");
     // Get derivatives df
+    this.d("Get dx wrt evolving params");
     var dfdP = [];
-    for (var i=0;i<this.evolvingParameterIndex;i++) { // Loop over all evolve params
+    for (var i=0;i<=this.evolvingParameterIndex;i++) { // Loop over all evolve params
         var dP = Math.exp(-4)*prior[this.opponentModel.Par[2*i]]; // small parameter increment
         if(Math.abs(dP)<Math.exp(-4))
             dP = Math.exp(-4);
-        var temp = {};
         temp.theta = prior[this.opponentModel.Par[2*i]]+dP // small increase in parameter 1
         temp.hiddenStates = prior; // QUESTION: should we use current best estimate (posterior) rather than prior here?
         var Xpdp = this.evolveHiddenStates(answers, true, temp);
@@ -213,19 +253,21 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
         var dfdP = (fpdp - posterior[this.opponentModel.f]) / dP; // Gradient w.r.t param 1
         posterior[this.opponentModel.df[i]] = dfdP;
     }
+    this.d("Got dx wrt evolving params");
     // Derive fx wrt observational parameters
+    this.d("Get dx wrt observational params");
     dfdP = [];
-    for (var i=0;i<this.observationParameterIndex;i++) {
+    for (var i=this.evolvingParameterIndex+1;i<=this.observationParameterIndex;i++) {
         var dP = Math.exp(-4)*prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]; // small parameter increment
         if(Math.abs(dP)<Math.exp(-4))
             dP = Math.exp(-4);
-        var temp = {};
         temp.hiddenStates = prior;
         temp.beta = prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]+dP; // small increase to parameter 1
         var fpdp = inverseSigmoid(this.getAnswerProbability(true,{temp}));
         dfdP = (fpdp-posterior[this.opponentModel.f]) / dP;
         posterior[this.opponentModel.df[i+this.evolvingParameterIndex]]; // store gradient
     }
+    this.d("Got dx wrt obs params");
     return posterior;
 }
 
