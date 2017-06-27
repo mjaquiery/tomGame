@@ -3,8 +3,8 @@
 
     Usage:
     >tom(tomLevel,ROLES.ROLE_HIDER) // set up the TOM as the hider
-    >answers[roundNumber++] = [tom.getNextAnswer(), Math.round(Math.random())] // Get the players' answers for the round
-    >tom.processFeedback(answers[roundNumber-1]) // get TOM to update its beliefs based on the evidence
+    >answers[roundNumber++] = {hider: tom.getNextAnswer(), seeker: Math.round(Math.random())] // Get the players' answers for the round
+    >tom.processFeedback({self: answers[roundNumber-1].hider, opponent: answers[roundNumber-1].seeker}) // get TOM to update its beliefs based on the evidence
 */
 var ROLE_NAMES = {0: "HIDER", 1: "SEEKER"};
 var ROLES = {HIDER: 0, SEEKER: 1};
