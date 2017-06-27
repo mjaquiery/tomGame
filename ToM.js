@@ -91,6 +91,7 @@ function getAnswerProbability(processingOther, overrideVars) {
         if(typeof overrideVars.bias != "undefined")
             bias = overrideVars.bias;
     }
+    this.d(states);
     //this.d("beta [log-theta] = "+beta);
     //this.d("bias = "+bias);
     var pOP; // Opponent's probability of picking 1
@@ -184,7 +185,7 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
         return [0,0,0,0,0,1,-1,0,-1,0,0,0]; // massive HACK
         return this.initialPrior; // just get the initialPrior value and use that
     }
-    prior = hiddenStates; // prior is the last set of hidden states (i.e. the previous round's posterior)
+    prior = hiddenStates.slice(0); // prior is the last set of hidden states (i.e. the previous round's posterior)
 
     if(typeof answers!="object")
         return prior; // If we didn't get answers (e.g. no user response) then don't update hidden states
@@ -208,7 +209,7 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     }
     // 1ToM case, back to RecToMfunction.m
     // NOTE: we skip P(k') because we assume k'=0
-    posterior = prior;
+    posterior = prior.slice(0);
     // Update E[theta] and V[theta]
     var pK = 1; // Probability opponent level = 0 see note above
     var pOP = sigmoid(prior[this.opponentModel.f]); // P(opponentAnswer=1)
@@ -234,8 +235,10 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     // Simulate opponent's f
     this.d("Get new f");
     temp = {};
-    temp.beta = prior[this.opponentModel.Par[2]];
-    temp.bias = prior[this.opponentModel.Par[4]];
+    temp.beta = posterior[this.opponentModel.Par[2]];
+    temp.bias = posterior[this.opponentModel.Par[4]];
+    temp.hiddenStates = opponentHiddenStates;
+    this.d(temp);
     posterior[this.opponentModel.f] = inverseSigmoid(this.getAnswerProbability(true,temp));
     this.d("f_new = "+posterior[this.opponentModel.f]);
     this.d("New f acquired.");
@@ -243,38 +246,51 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     this.d("Get dx wrt evolving params");
     var dfdP = [];
     for (var i=0;i<=this.evolvingParameterIndex;i++) { // Loop over all evolve params
-        var dP = Math.exp(-4)*prior[this.opponentModel.Par[2*i]]; // small parameter increment
-        if(Math.abs(dP)<Math.exp(-4))
-            dP = Math.exp(-4);
+        this.d("[Parev(1)] = "+prior[this.opponentModel.Par[2*i]]);
+        var dP = 1e-4*prior[this.opponentModel.Par[2*i]]; // small parameter increment
+        this.d("dP = "+dP);
+        if(Math.abs(dP)<1e-4)
+            dP = 1e-4;
+        this.d("dP = "+dP);
+        this.d("Par = "+prior[this.opponentModel.Par[2*i]]);
         temp.theta = prior[this.opponentModel.Par[2*i]]+dP // small increase in parameter 1
-        temp.hiddenStates = prior; // QUESTION: should we use current best estimate (posterior) rather than prior here?
-        var Xpdp = this.evolveHiddenStates(answers, true, temp);
-        var fpdp = inverseSigmoid(this.getAnswerProbability(true,{hiddenStates: Xpdp}));
+        this.d("Par = "+temp.theta);
+        temp.hiddenStates = prior;
+        this.d(temp);
+        var Xpdp = this.evolveHiddenStates(answers, true, temp); // See how hidden states evolve
+        temp.hiddenStates = Xpdp;
+        this.d(temp);
+        var fpdp = inverseSigmoid(this.getAnswerProbability(true,temp)); // get E(x(P+dP))
         var dfdP = (fpdp - posterior[this.opponentModel.f]) / dP; // Gradient w.r.t param 1
         posterior[this.opponentModel.df[i]] = dfdP;
     }
-    this.d("Got dx wrt evolving params");
+    this.d("Got dx wrt evolving params: "+posterior[this.opponentModel.df[0]]);
     // Derive fx wrt observational parameters
     this.d("Get dx wrt observational params");
+    this.d(temp);
     dfdP = [];
-    for (var i=this.evolvingParameterIndex+1;i<=this.observationParameterIndex;i++) {
-        var dP = Math.exp(-4)*prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]; // small parameter increment
-        if(Math.abs(dP)<Math.exp(-4))
-            dP = Math.exp(-4);
-        temp.hiddenStates = prior;
-        temp.beta = prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]+dP; // small increase to parameter 1
-        var fpdp = inverseSigmoid(this.getAnswerProbability(true,{temp}));
+    for (var i=1;i<=2;i++) { // the two observational parameters
+        this.d("Obs Param "+i+"/2");
+        var dP = 1e-4*prior[this.opponentModel.Par[2+(2*(i-1))]]; // small parameter increment in the first parameter
+        this.d("dP = "+dP);
+        if(Math.abs(dP)<1e-4)
+            dP = 1e-4;
+        //temp.hiddenStates = opponentHiddenStates;
+        //temp.beta = prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]+dP; // small increase to parameter 1
+        var fpdp = inverseSigmoid(this.getAnswerProbability(true,temp));
+        this.d("fpdp = "+fpdp);
         dfdP = (fpdp-posterior[this.opponentModel.f]) / dP;
-        posterior[this.opponentModel.df[i+this.evolvingParameterIndex]]; // store gradient
+        this.d("dfdP = "+dfdP)
+        posterior[this.opponentModel.df[i]]; // store gradient
     }
-    this.d("Got dx wrt obs params");
+    this.d("Got dx wrt obs params: "+posterior[this.opponentModel.df[1]]+", "+posterior[this.opponentModel.df[2]]);
     return posterior;
 }
 
 // Copying the cap from VBA's sigmoid.m
 function sigmoid(x) {
     var y = 1 / (1+Math.exp((x*-1)));
-    var cap = Math.exp(-4);
+    var cap = 1e-4;
     if(y<cap)
         return cap;
     else if(y>(1-cap))
@@ -286,10 +302,10 @@ function sigmoid(x) {
 // invsigmoid.m
 function inverseSigmoid(x) {
     var y = Math.log(x/(1-x));
-    var cap = 9.2102;
-    if(y>cap)
+    var cap = Math.log(1e-4);
+    if(y<=cap)
         return cap;
-    else if(y<(cap*-1))
+    else if(y>=(cap*-1))
         return cap*-1;
     else
         return y;
