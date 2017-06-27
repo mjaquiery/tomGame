@@ -1,6 +1,6 @@
 # tomGame
 
-Javascript port of https://github.com/MBB-team/VBA-toolbox.
+Javascript port of part of the k-ToM element of the MATLAB VBA toolbox: https://github.com/MBB-team/VBA-toolbox.
 
 #ToM.js
 
