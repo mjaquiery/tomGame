@@ -1,6 +1,6 @@
 # tomGame
 
-Javascript port of ([http://mbb-team.github.io/VBA-toolbox/wiki/ktom/]()).
+Javascript port of https://github.com/MBB-team/VBA-toolbox.
 
 #ToM.js
 
