@@ -1,0 +1,563 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Test</title>
+    <script
+            src="https://code.jquery.com/jquery-2.2.4.js"
+            integrity="sha256-iT6Q9iMJYuQiMWNd9lDyBUStIq/8PuOW33aOqmvFpqI="
+            crossorigin="anonymous"></script>
+    <script src="local_results_manager.js"></script>
+    <script src="bayes.js/distributions.js"></script>
+    <script src="ToM.js"></script>
+</head>
+
+<body>
+<!-- Put the entire test in the body of this html document to test it,
+this includes all html, js (inc. libraries) and css. Then when the test
+is working, paste the contents of the body into the html section when
+creating the custom test on the website-->
+
+<!-- COPY FROM HERE TO END INTO HTML SECTION ON SYNTOOLKIT-->
+<div id="wrapper">
+    <div id='test-body'>
+        <section id="Intro" class="sect hidden">
+            <div class="justify-wrapper">
+                <p class="centre-wrapper">Welcome to my stupid questionnaire.</p>
+                <p>You know how to do questionnaires. They're a fundamental force in the modern world; a part of our shared understanding and a vital building block of our culture. The meek may inherit the earth but they shall do so through mastery of opinon polls and questionnaires.</p>
+                <div id='intro-button' class="button">Begin</div>
+            </div>
+        </section>
+
+        <section id="Test" class="hidden">
+            <div id="Instructions" class="game-text">You are playing against Player 1</div>
+            <div class="centre-wrapper" id="Game">
+                <div id="Div0" class="option-div">
+                    <img id="Option0" src="images/tree_colour.png" class="test-img">
+                    <p class="option-text game-text">1</p>
+                </div>
+                <div id="Div1" class="option-div">
+                    <img id="Option1" src="images/brick_colour.png" class="test-img">
+                    <p class="option-text game-text">2</p>
+                </div>
+                <div id="FeedbackText"></div>
+                <img id="AnswerImg" src="images/person.png" class="hidden">
+            </div>
+        </section>
+
+        <section id="BlockFeedback" class="sect hidden">
+            <div class="centre-wrapper" id="Feedback" style="">
+                <p id='FeedbackScore'></p>
+            </div>
+            <br>
+            <div id='FeedbackButton' class="button">Okay</div>
+            <div id="Debug" style="margin-top: 10px">Graph</div>
+            <div id="Debug2" style="margin-top: 10px">Graph</div>
+        </section>
+
+        <section id="Outro" class="sect hidden">
+            <div class="centre-wrapper" id="Feedback" style="">
+                <p>Thank you for participating.</p>
+                <p>You scored <var id='FeedbackScore'></var>/<var class='item-count'></var>.</p><br>
+            </div>
+            <br>
+            <div id='endExperiment-button' class="button">Okay</div>
+        </section>
+    </div>
+</div>
+
+  <script>
+
+    /* Social Framing of Theory of Mind Test
+     * Test design: Devaine et al. (2014) PLOS Computational Biology 10(12):e1003992
+                            http://doi.org/10.1371/journal.pcbi.1003992
+     * Coding implementation: Matt Jaquiery - 2017
+     * bayes.js: Rasmus Bååth - https://github.com/rasmusab/bayes.js
+     * resultsManager from the syntoolkit project:
+        James Alvarez - https://www.syntoolkit.org/welcome
+    * Images used in accordance with their licenses
+    * tree image: https://pixabay.com/en/tree-forest-trunk-nature-leaves-576847/
+    * brick wall: https://pixabay.com/en/brick-brick-wall-city-walls-2217715/ (modified)
+    * person: https://pixabay.com/en/man-men-human-wc-toilet-symbol-99040/
+    * slot machine: https://pixabay.com/en/casino-gambling-game-slot-machine-161438/ (modified)
+    * coin: https://upload.wikimedia.org/wikipedia/commons/d/d6/Gold_coin_icon.png
+    TODO:
+    */
+
+    // We don't need base64 decoding so the below will be fine
+    var GET = function () {
+        // This function is anonymous, is executed immediately and
+        // the return value is assigned to GET!
+        // http://stackoverflow.com/questions/979975/how-to-get-the-value-from-the-get-parameters
+        var query_string = {};
+        if (typeof testData !== "undefined" && typeof testData.variables !== "undefined")
+            query_string = testData.variables;
+        var query = (typeof testData != "undefined" && testData.query)? testData.query : window.location.search.substring(1);
+        var vars = [];
+        if (query.length)
+          vars = query.split("&");
+        for (var i=0;i<vars.length;i++) {
+        var pair = vars[i].split("=");
+            // If first entry with this name
+            if (typeof query_string[pair[0]] === "undefined") {
+                query_string[pair[0]] = decodeURIComponent(pair[1]);
+                // If second entry with this name
+            } else if (typeof query_string[pair[0]] === "string") {
+                var arr = [ query_string[pair[0]],decodeURIComponent(pair[1]) ];
+                query_string[pair[0]] = arr;
+                // If third or later entry with this name
+            } else {
+                query_string[pair[0]].push(decodeURIComponent(pair[1]));
+            }
+        }
+        return query_string;
+    }();
+
+    // return true if x is not undefined
+    function is(x)  {
+      return !(typeof(x) === "undefined");
+    }
+
+    // Reference variables (Don't touch these!)
+    var imgList = [['tree', 'brick', 'person'],
+                    ['slot', 'slot', 'coin']];
+    var seenIntro = [0,0,0,0];
+//------------------------------------------------------------------------------
+    // Control parameters
+    // These control parameters can be edited to change the content and
+    // style of the tests. Feel free to experiment with different values.
+
+    // We can override these values with GET parameters
+    var allowNav = is(GET.allowNav)? parseInt(GET.allowNav) : 0;
+    var skipIntros = is(GET.skipIntros)? parseInt(GET.skipIntros) : 0;
+    var testSet = is(GET.testSet)? GET.testSet : "4321";
+    var blockCount = is(GET.blockCount)? parseInt(GET.blockCount) : 1;
+    var trialsPerBlock = is(GET.trialsPerBlock)? parseInt(GET.trialsPerBlock) : 60;
+    var choiceTime = is(GET.choiceTime)? parseInt(GET.choiceTime) : 1300;
+    var feedbackTime = is(GET.feedbackTime)? parseInt(GET.feedbackTime) : 1000;
+
+//------------------------------------------------------------------------------
+    // Runtime variables (leave these alone, too)
+    var testType; // 1,2 = RB; 3,4 = TOM; 1,3 = Fr0; 2,4 = Fr1
+    var currentTrialNumber;
+    var responseTime;
+    var trialStartTime;
+    var playerChoice;
+    var imgArr;
+    var score;
+    var tom;
+    var bias;
+    var answers;
+
+    //Remember to not use $ symbol outside anonymous function
+    (function($){
+
+        // Hides all the sections but one (passed as Jquery object)
+        function hideAllBut(section)  {
+          $('#Intro').hide();
+          $('#Test').hide();
+          $('#BlockFeedback').hide();
+          $('#Outro').hide();
+
+          if (section != null)  {
+            section.show();
+            if (section.is('.sect'))  {
+              var h = section.outerHeight();
+              var maxH = $(window).height();
+              var t = Math.floor((maxH-h)/4);
+              if (t>0)
+                section.css({top: t+'px'});
+              else {
+                section.css({top: '0px'});
+              }
+            console.log("hideAllBut: "+section.selector)
+            }
+            else {
+              console.log("hideAll!")
+            }
+          }
+        }
+
+        // Work out which test we're supposed to be doing and set up which
+        // test type comes next.
+        function flowControl() {
+            if (!testSet.length)  {
+                console.log("No trial list set! Exiting.");
+                finalFeedback();
+                return;
+            }
+            var tests = testSet.split("");
+            // tests[0] is the current testType
+            testType = parseInt(tests.shift());
+            // And put the testOrder variable back where we found it with our
+            // current test removed from the beginning
+            testSet = tests.join("");
+            console.log("flowControl -> \""+testSet+"\"");
+            // Start our test
+            showIntro();
+        }
+
+        $(window).load(setupInstructions);
+
+        function setupInstructions() {
+            // Create resultsManager and store some background info (email ('tag'), and 'usa'-ness)
+            resultsManager = new ResultsManager('/results-api/results');
+            flowControl();
+        }
+
+        function showIntro()  {
+            if(!(skipIntros || seenIntro[testType])) {
+                seenIntro[testType] = true;
+                hideAllBut($('#Intro'));
+                $('#intro-button').off().on('click', function (evt) {
+                    startTest();
+                });
+            }
+            else
+                startTest();
+        }
+
+        function startTest()  {
+            hideAllBut($('#Test'));
+            currentTrialNumber = 0;
+            score = 0;
+            imgArr = imgList[(testType%2==0)?1:0];
+            $('#AnswerImg').attr('src',"images/"+imgArr[2]+".png");
+            if(testType>2) {
+                tom = new tom(1);
+                tom.init();
+            }
+            else {
+                bias = (Math.round(Math.random()))? 0.65:0.35;
+                answers = [];
+            }
+            startTrial();
+        }
+
+        function startTrial() {
+            console.log('Starting trial '+currentTrialNumber);
+            $('#AnswerImg').hide();
+            $('#FeedbackText').hide();
+            playerChoice = -1;
+            setTimeout(feedbackPhase,choiceTime);
+            trialStartTime = Date.now();
+            for (var i=0;i<2;i++) {
+                $('#Option'+i).attr('src','images/'+imgArr[i]+'_greyscale.png');
+            }
+            $('img.test-img').off().on('click',function (evt) {
+                clickImg(this.id);
+            });
+            $(document).on('keyup', function (evt) {
+                keyPress(evt.keyCode);
+            });
+            $('img.test-img').addClass('img-active');
+            $('.option-text').show();
+        }
+
+        function feedbackPhase() {
+            // disable clicking
+            $('img.test-img').off();
+            $('img.test-img').removeClass('img-active');
+            $('.option-text').hide();
+            var feedbackText;
+            // calculate result
+            answer = getAnswer();
+            console.log("Choice: "+playerChoice+"; Answer "+answer);
+            if(playerChoice==-1) {
+                // No choce made, so no reveal
+                feedbackText = "Too slow - you lose!";
+            } else {
+                // reveal
+                var pos = $('#Option'+answer).position();
+                if (testType%2==1) {
+                    pos.top = pos.top + ($('#Option'+answer).innerHeight()-139);
+                    pos.left = pos.left + ((answer)? 40 : 100);
+                } else {
+                    pos.top = pos.top + 5;
+                }
+                $('#AnswerImg').css({top: pos.top, left: pos.left}).show();
+                if(playerChoice==answer) {
+                    // Player wins
+                    feedbackText = "Well done!";
+                    score++;
+                } else {
+                    // Opponent wins
+                    feedbackText = "You lose!"
+                }
+            }
+            $('#FeedbackText').html("<p class='game-text'>"+feedbackText+"</p>").show();
+            // record result
+            resultsManager.StoreTrial({playerChoice: playerChoice, answer: answer, responseTime: responseTime}, currentTrialNumber);
+            currentTrialNumber++;
+            if (currentTrialNumber >= trialsPerBlock) {
+                setTimeout(showBlockFeedback,feedbackTime);
+            } else {
+                setTimeout(startTrial,feedbackTime);
+            }
+        }
+
+        function showBlockFeedback() {
+            getFeedbackText();
+            hideAllBut($('#BlockFeedback'));
+            $('#FeedbackButton').on('click',function (evt) {
+                $(this).off();
+                flowControl();
+            });
+            if(testType>2) {
+                tom.showDebugInfo(["aOP","pOP","pSELF"],'Debug');
+                tom.showDebugInfo(["aOP","mu","sigma"],'Debug2');
+            } else {
+                debugInfo();
+            }
+        }
+
+        function clickImg(id) {
+            responseTime = Date.now() - trialStartTime;
+            $('img.test-img').off();
+            $(document).off('keypress');
+            $('#'+id).attr('src',$('#'+id).attr('src').replace('greyscale','colour'));
+            $('.option-text').hide();
+            playerChoice = parseInt(id.substr(-1));
+        }
+
+        function keyPress(k) {
+            var ans;
+            if (k==97 || k==35 || k==49 || k==100 || k==37) {
+                ans = 0; // Left
+            } else if (k==98 || k==40 || k==50 || k==102 || k==39) {
+                ans = 1; // Right
+            } else {
+                return;
+            }
+            $('#Option'+ans).click();
+        }
+
+        function getAnswer() {
+            var ans = -1;
+            if (testType>2) {
+                ans = tom.getNextAnswer();
+                if (playerChoice!=-1)
+                    tom.giveFeedback(playerChoice);
+            } else {
+                ans = (Math.random()>=bias)? 1 : 0;
+                answers[answers.length] = {h: ans, s: playerChoice};
+            }
+            return ans;
+        }
+
+        function submitResults() {
+            resultsManager.SendResults(resultsPostedCallback);
+        }
+
+        function resultsPostedCallback(success, returnedData) {
+            console.log(success? "Results saved" : "Error saving results")
+            if(skipIntro) {
+                window.location = success ? returnedData.redirect : '/error';
+            }
+            else {
+                getFeedbackText();
+                hideAllBut($('#Outro'));
+                $('#endExperiment-button').off().on('click', function (evt) {
+                    window.location = success ? returnedData.redirect : '/error';
+                });
+            }
+        }
+
+        function finalFeedback() {
+
+        }
+
+        function getFeedbackText() {
+            $('#FeedbackScore').text("You scored "+score+"/"+trialsPerBlock);
+        }
+
+        function debugInfo() {
+            var out = [];
+            var sum = 0;
+            var cols = ["Trial", "Hider", "Seeker"];
+            for (var i=0;i<answers.length;i++) {
+                out[i] = [i,answers[i].h, answers[i].s];
+                if (answers[i].h)
+                    sum++;
+            }
+            out.unshift(cols);
+            drawChart(out,"Debug");
+            $('#Debug2').html("<p class='centre-wrapper'>"+(sum/answers.length*100).toString()+"%</p>");
+        }
+
+        // From https://api.jquery.com/jquery.getscript/
+        jQuery.cachedScript = function( url, options ) {
+            // Allow user to set any option except for dataType, cache, and url
+            options = $.extend( options || {}, {
+                dataType: "script",
+                cache: true,
+                url: url
+                });
+
+            // Use $.ajax() since it is more flexible than $.getScript
+            // Return the jqXHR object so we can chain callbacks
+            return jQuery.ajax( options );
+        };
+
+    })(jQuery)
+
+      window.onbeforeunload = function() { if (GET.allowNav==0) return "Your progess on this test will be lost."; };
+  </script>
+  <!--<link rel="stylesheet" type="text/css" href="colour_style.css">-->
+    <style>
+
+        @import url(https://fonts.googleapis.com/css?family=Open+Sans:400,700);
+
+        .centre-wrapper {
+            text-align: center;
+        }
+
+        .justify-wrapper  {
+            text-align: justify;
+        }
+
+        #options  {
+            margin: auto;
+        }
+
+        .button {
+            font-size: 1.5em;
+            font-weight: bold;
+            width: 10em;
+            height: 1.5em;
+            margin: auto;
+            text-align: center;
+            padding-top: 0em;
+            border: 0px solid black;
+            border-radius: 0.4em;
+            box-shadow: 0px 0px 5px 1px black;
+            background-color: #f0f0f0;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            box-shadow: 0px 0px 15px 1px black;
+            background-color: #e0e0e0;
+        }
+
+        #Test-prompt  {
+            font-size: 28px;
+        }
+
+        #intro-button  {
+            left: 265px;
+        }
+
+        area {
+            cursor: pointer;
+        }
+
+        .test-img {
+            border: 5px solid white;
+            padding: 5px;
+            max-width: 100%;
+        }
+
+        .img-active:hover {
+            border-color: yellow;
+            cursor: pointer;
+        }
+
+        #Game {
+            width: 100%;
+        }
+
+        #Div0 {
+            float: left;
+        }
+
+        #Div1 {
+            float: right;
+        }
+
+        .option-div {
+            width: 40%;
+        }
+
+        .option-text {
+
+        }
+
+        .game-text {
+            font-size: 2em;
+            text-align: center;
+        }
+
+        #FeedbackText {
+            clear: both;
+            font-size: 1.5em;
+        }
+
+        #AnswerImg {
+            position: absolute;
+            z-index: 1;
+        }
+
+        #Instructions {
+            padding: 1em;
+        }
+
+        #footer {
+            position:absolute;
+            bottom: 2%;
+            font-size: 10px;
+            text-align: center;
+            max-width: 550px;
+        }
+
+        #wrapper  {
+            width: 80%;
+            margin: auto;
+        }
+
+        .sect {
+            position: relative;
+        }
+
+        var {
+            font-style: normal;
+        }
+
+        body { background-color: #FFFFFF;
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+    </style>
+<!-- COPY TO HERE  -->
+<!--
+Test variables:
+* ALL QUESTION NUMBERS
+* ALL QUESTIONS
+-->
+
+<!-- Google Charts stuff -->
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {'packages':['corechart']});
+
+      function drawChart(array,divID) {
+        var data = google.visualization.arrayToDataTable(array);
+
+        var options = {
+          legend: { position: 'bottom' },
+          height: 500,
+          //width: data.getNumberOfRows() * 15
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById(divID));
+
+        chart.draw(data, options);
+      }
+    </script>
+</body>
+</html>
