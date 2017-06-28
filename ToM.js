@@ -91,6 +91,7 @@ function getAnswerProbability(processingOther, overrideVars) {
         if(typeof overrideVars.bias != "undefined")
             bias = overrideVars.bias;
     }
+    this.d("[ObsRecGen ("+beta+")] "+(processingOther==true));
     this.d(states);
     //this.d("beta [log-theta] = "+beta);
     //this.d("bias = "+bias);
@@ -215,7 +216,7 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     var pOP = sigmoid(prior[this.opponentModel.f]); // P(opponentAnswer=1)
     for (var i=0;i<this.opponentModel.df.length;i++) { // Update all the hidden states tracking opponent parameters
         var df = prior[this.opponentModel.df[i]]; // d[x(theta)]/dtheta
-        var V0 = Math.exp(prior[this.opponentModel.Par[1+2*i]]) + Math.exp(theta)*prior[this.evolvingParameters[i]]; // diluted prior variance
+        var V0 = Math.exp(prior[this.opponentModel.Par[1+2*i]]) + Math.exp(theta)*this.evolvingParameters[i]; // diluted prior variance
         var Vu = 1 / ((1/V0)+pK*pOP*(1-pOP)*Math.pow(df,2)); // posterior variance
         var E0 = prior[this.opponentModel.Par[2*i]]; // Prior mean
         var Eu = E0 + pK*Vu*(answers.opponent-pOP)*df; // Posterior mean
@@ -270,18 +271,25 @@ function evolveHiddenStates(answers,processingOther,overrideVars) {
     this.d(temp);
     dfdP = [];
     for (var i=1;i<=2;i++) { // the two observational parameters
-        this.d("Obs Param "+i+"/2");
-        var dP = 1e-4*prior[this.opponentModel.Par[2+(2*(i-1))]]; // small parameter increment in the first parameter
+        temp.beta = posterior[this.opponentModel.Par[2]];
+        temp.bias = posterior[this.opponentModel.Par[4]];
+        temp.hiddenStates = opponentHiddenStates;
+        var param = posterior[this.opponentModel.Par[i*2]];
+        this.d("Obs Param "+i+"/2 = "+param);
+        var dP = 1e-4*param; // small parameter increment in the first parameter
         this.d("dP = "+dP);
         if(Math.abs(dP)<1e-4)
             dP = 1e-4;
         //temp.hiddenStates = opponentHiddenStates;
-        //temp.beta = prior[this.opponentModel.Par[(2*this.evolvingParameterIndex)+2*i]]+dP; // small increase to parameter 1
+        if(i==1)
+            temp.beta = param+dP; // small increase to parameter
+        else
+            temp.bias = param+dP;
         var fpdp = inverseSigmoid(this.getAnswerProbability(true,temp));
         this.d("fpdp = "+fpdp);
         dfdP = (fpdp-posterior[this.opponentModel.f]) / dP;
         this.d("dfdP = "+dfdP)
-        posterior[this.opponentModel.df[i]]; // store gradient
+        posterior[this.opponentModel.df[i]] = dfdP; // store gradient
     }
     this.d("Got dx wrt obs params: "+posterior[this.opponentModel.df[1]]+", "+posterior[this.opponentModel.df[2]]);
     return posterior;
