@@ -92,7 +92,7 @@ creating the custom test on the website-->
     // We can override these values with GET parameters
     var p1 = is(GET.p1)? parseInt(GET.p1) : 1;
     var p2 = is(GET.p2)? parseInt(GET.p2) : -1;
-    var trials = is(GET.trials)? parseInt(GET.trials) : 5;
+    var trials = is(GET.trials)? parseInt(GET.trials) : 10;
 
 //------------------------------------------------------------------------------
     // Runtime variables (leave these alone, too)
@@ -149,7 +149,7 @@ creating the custom test on the website-->
     }
 
     function runTrial() {
-        console.log('Starting trial '+currentTrialNumber++);
+        console.log('---Pass '+ currentTrialNumber++ +':-------------------------------------------');
         var hChoice = pH.getNextAnswer();
         var sChoice = pS.getNextAnswer();
         if (hChoice == sChoice)
@@ -162,7 +162,7 @@ creating the custom test on the website-->
     function showResults() {
         debug(pH,0);
         debug(pS,2);
-        $('#Results').html("<p>Score:<br>Hider ("+pH.name+"): "+(score)+"<br>Seeker ("+pS.name+"): "+(trials-score)+"<br><strong>Winner: "+((score>trials/2)? "Hider":"Seeker")+"("+(Math.round(((score>trials/2)? score:trials-score)/trials*10000)/100)+"%)</strong>"+"</p>");
+        $('#Results').html("<p>Score:<br>Hider ("+pH.name+"): "+(trials-score)+"<br>Seeker ("+pS.name+"): "+(score)+"<br><strong>Winner: "+((score>trials/2)? "Hider":"Seeker")+"("+(Math.round(((score>trials/2)? score:trials-score)/trials*10000)/100)+"%)</strong>"+"</p>");
     }
 
     function debug(player,x) {
