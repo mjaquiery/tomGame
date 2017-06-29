@@ -48,7 +48,7 @@ tom.prototype.getInputStructure = function (level, role, evolvingParameters) {
     var out = {};
     // Properties shared by 0Tom and 1Tom:
     out.level = level;
-    out.role = role;
+    out.role = (role==ROLES.SEEKER)? ROLES.SEEKER : ROLES.HIDER;
     out.index = { hiddenState: [0,1] };
 
     if (level==0)  // Finished with shared properties
@@ -63,9 +63,6 @@ tom.prototype.getInputStructure = function (level, role, evolvingParameters) {
         params: [6,7,8,9,10,11],
         Es: [6,8,10], // This and below are just shortcuts
         Vs: [7,9,11],
-        temperature: {E:6, V:7},
-        beta: {E:8, V:9},
-        bias: {E:10, V:11},
     };
     out.evolvingParameterMask = evolvingParameters;
     return out;

@@ -10,7 +10,6 @@
     <script src="../../results_manager.js"></script>
     <script src="../../testFunctions.js"></script>
     <link href="../../testStyle.css" type="text/css" rel="stylesheet">
-    <script src="bayes.js/distributions.js"></script>
     <script src="ToM.js"></script>
 </head>
 
@@ -121,8 +120,8 @@
     var testSet = is(GET.testSet)? GET.testSet.split("") : "4321".split("");
     var blockCount = is(GET.blockCount)? parseInt(GET.blockCount) : 1;
     var trialsPerBlock = is(GET.trialsPerBlock)? parseInt(GET.trialsPerBlock) : 60;
-    var choiceTime = is(GET.choiceTime)? parseInt(GET.choiceTime) : 1300;
-    var feedbackTime = is(GET.feedbackTime)? parseInt(GET.feedbackTime) : 1000;
+    var choiceTime = is(GET.choiceTime)? parseInt(GET.choiceTime) : 2000;
+    var feedbackTime = is(GET.feedbackTime)? parseInt(GET.feedbackTime) : 1500;
 
 //------------------------------------------------------------------------------
     // Runtime variables (leave these alone, too)
@@ -342,7 +341,7 @@
             if (testType>2) {
                 ans = tom.getNextAnswer();
                 if (playerChoice!=-1)
-                    tom.giveFeedback(playerChoice);
+                    tom.processFeedback({self: ans, opponent: playerChoice});
             } else {
                 ans = (Math.random()>=bias)? 1 : 0;
                 answers[answers.length] = {h: ans, s: playerChoice};

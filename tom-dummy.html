@@ -91,8 +91,8 @@ creating the custom test on the website-->
 
     // We can override these values with GET parameters
     var p1 = is(GET.p1)? parseInt(GET.p1) : 1;
-    var p2 = is(GET.p2)? parseInt(GET.p2) : -1;
-    var trials = is(GET.trials)? parseInt(GET.trials) : 10;
+    var p2 = is(GET.p2)? parseInt(GET.p2) : 50;
+    var trials = is(GET.trials)? parseInt(GET.trials) : 1000;
 
 //------------------------------------------------------------------------------
     // Runtime variables (leave these alone, too)
@@ -101,6 +101,7 @@ creating the custom test on the website-->
     var pS;
     var tom;
     var score;
+    var scores = [];
 
     // Hides all the sections but one (passed as Jquery object)
     function hideAllBut(section)  {
@@ -138,31 +139,56 @@ creating the custom test on the website-->
 
     function runTest()  {
         hideAllBut($('#BlockFeedback'));
-        currentTrialNumber = 0;
-        score = 0;
-        pH = (p1==-1)? new nonTom() : new tom(p1,ROLES.HIDER,true);
-        pS = (p2==-1)? new nonTom() : new tom(p2,ROLES.SEEKER);
-        for (var i=0;i<trials;i++) {
-            runTrial();
+        var blocks = 10;
+        for (var b=0;b<blocks;b++) {
+            var setsToPlay = 10;
+            for (var n=0;n<setsToPlay;n++) {
+                currentTrialNumber = 0;
+                score = 0;
+                pH = (p1>1)? new nonTom(p1,ROLES.HIDER) : new tom(p1,ROLES.HIDER);
+                pS = (p2>1)? new nonTom(p2,ROLES.SEEKER) : new tom(p2,ROLES.SEEKER);
+                for (var i=0;i<trials;i++) {
+                    runTrial();
+                }
+                scores[n] = trials-score; // record hider scores
+            }
+            showResults(b==0);
         }
-        showResults();
     }
 
     function runTrial() {
-        console.log('---Pass '+ currentTrialNumber++ +':-------------------------------------------');
+        currentTrialNumber++;
+        //console.log('---Pass '+currentTrialNumber+':-------------------------------------------');
         var hChoice = pH.getNextAnswer();
         var sChoice = pS.getNextAnswer();
-        if (hChoice == sChoice)
+        if (hChoice == sChoice) {
+            console.log("Seeker wins trial "+currentTrialNumber);
             score++;
-        console.log('ToM Victory?: '+(hChoice!=sChoice)+" (me="+hChoice+" vs other="+sChoice+")");
+        }
+        //console.log('ToM Victory?: '+(hChoice!=sChoice)+" (me="+hChoice+" vs other="+sChoice+")");
         pH.processFeedback({self: hChoice, opponent: sChoice});
         pS.processFeedback({self: sChoice, opponent: hChoice});
     }
 
-    function showResults() {
+    function showResults(clear) {
         debug(pH,0);
         debug(pS,2);
-        $('#Results').html("<p>Score:<br>Hider ("+pH.name+"): "+(trials-score)+"<br>Seeker ("+pS.name+"): "+(score)+"<br><strong>Winner: "+((score>trials/2)? "Hider":"Seeker")+"("+(Math.round(((score>trials/2)? score:trials-score)/trials*10000)/100)+"%)</strong>"+"</p>");
+        //$('#Results').html("<p>Score:<br>Hider ("+pH.name+"): "+(trials-score)+"<br>Seeker ("+pS.name+"): "+(score)+"<br><strong>Winner: "+((score>trials/2)? "Hider":"Seeker")+"("+(Math.round(((score>trials/2)? score:trials-score)/trials*10000)/100)+"%)</strong>"+"</p>");
+        var sum = 0;
+        for(var i=0;i<scores.length;i++) sum += scores[i];
+        var mean = sum/scores.length;
+        var percent = Math.round(mean/trials*100*10)/10;
+        // standard deviation:
+        var variance = 0;
+        for(var i=0;i<scores.length;i++) variance += Math.pow((scores[i]-mean),2);
+        variance = variance/scores.length;
+        var stdDev = Math.sqrt(variance);
+        stdDev = Math.round(stdDev*100)/100;
+        if(clear==true)
+            prevHTML = "";
+        else
+            prevHTML = $('#Results').html();
+        $('#Results').html(prevHTML+"<p>Mean hider score: "+mean+" &#xB1;"+stdDev+" ("+percent+"% of "+trials+" trials)");
     }
 
     function debug(player,x) {
@@ -175,26 +201,24 @@ creating the custom test on the website-->
         }
     }
 
-    function nonTom() {
+    function nonTom(bias,role) {
         // Functions
-        this.init = nTi;
         this.getNextAnswer = gNA;
         this.showDebugInfo = sDI;
         this.processFeedback = gF;
-        this.init();
-    }
-
-    function nTi(role) {
-        this.bias = (Math.round(Math.random()))? 0.65:0.35;
+        this.bias = bias/100;
+        this.bias = (Math.round(Math.random()))? this.bias : 1-this.bias;
         this.role = role;
         this.type = TOM_TYPES.NON_TOM;
-        this.answers = [0,0,1,0,1,1,1,1,0,0]; // hardcoded for debugging
-        this.currentAnswer = 0;
-        this.name = "Non-ToM"
+        //this.answers = [0,0,1,0,1,1,1,1,0,0]; // hardcoded for debugging
+        //this.currentAnswer = 0;
+        this.answers = [];
+        this.name = "Non-ToM ("+(this.bias*100)+")"
     }
 
     function gNA() {
-        return this.answers[this.currentAnswer++];
+        //return this.answers[this.currentAnswer++];
+        return (Math.random()<this.bias)? 1:0;
     }
 
     function sDI() {
