@@ -1,8 +1,8 @@
 # tomGame
 
-Javascript port of ([http://mbb-team.github.io/VBA-toolbox/wiki/ktom/]()).
+Javascript port of part of the k-ToM element of the MATLAB VBA toolbox: https://github.com/MBB-team/VBA-toolbox.
 
-#ToM.js
+# ToM.js
 
 This is the engine of the project (the html files are merely implementations). ToM is invoked as follows:
 
